@@ -8,11 +8,11 @@ Students can use the system to browse available accommodation, view rental detai
 
 ## Team Information
 
-**Team Name:** 
+**Team Name:** RoomSphere
 
 | Team Member     | GitHub Username   |
 | --------------- | ----------------- |
-| Aneeta Jijo     | Seaweed3021       |
+| Aneeta Jijo     | seaweed3021       |
 | Mitesh Chand Thakur | mitscodes |
 | Muskan | muskanbhambu27 |
 
