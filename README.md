@@ -13,8 +13,8 @@ Students can use the system to browse available accommodation, view rental detai
 | Team Member     | GitHub Username   |
 | --------------- | ----------------- |
 | Aneeta Jijo     | Seaweed3021       |
-| Mitesh |  |
-| Muskan |  |
+| Mitesh Chand Thakur | mitscodes |
+| Muskan | muskanbhambu27 |
 
 ## OPC Persona
 
