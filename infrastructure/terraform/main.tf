@@ -78,6 +78,49 @@ resource "aws_db_subnet_group" "roomsphere" {
   tags = local.common_tags
 }
 
+
+resource "aws_security_group" "app" {
+  name        = "roomsphere-app-sg"
+  description = "Security group for RoomSphere application"
+  vpc_id      = data.aws_vpc.existing.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "roomsphere-app-sg"
+  })
+}
+
+resource "aws_security_group" "db" {
+  name        = "roomsphere-db-sg"
+  description = "Allow PostgreSQL only from RoomSphere application"
+  vpc_id      = data.aws_vpc.existing.id
+
+  ingress {
+    description     = "PostgreSQL from RoomSphere application"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "roomsphere-db-sg"
+  })
+}
+
 output "vpc_id" {
   value = data.aws_vpc.existing.id
 }
@@ -124,3 +167,54 @@ output "private_documents_bucket_name" {
   description = "Private S3 bucket for RoomSphere documents"
   value       = "roomsphere-private-docs-rsm-7k29x"
 }
+
+
+variable "db_password" {
+  description = "Master password for the RoomSphere development database"
+  type        = string
+  sensitive   = true
+  nullable    = false
+
+  validation {
+    condition     = length(var.db_password) >= 12
+    error_message = "The database password must be at least 12 characters."
+  }
+}
+
+resource "aws_db_instance" "roomsphere" {
+  identifier        = "roomsphere-postgres-dev"
+  engine            = "postgres"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_type      = "gp3"
+
+  db_name  = "roomsphere"
+  username = "roomsphere_admin"
+  password = var.db_password
+
+  db_subnet_group_name   = aws_db_subnet_group.roomsphere.name
+  vpc_security_group_ids = [aws_security_group.db.id]
+  publicly_accessible    = false
+
+  storage_encrypted          = true
+  backup_retention_period    = 0
+  auto_minor_version_upgrade = true
+  apply_immediately          = true
+
+  skip_final_snapshot = true
+  deletion_protection = false
+
+  tags = merge(local.common_tags, {
+    Name = "roomsphere-postgres-dev"
+  })
+}
+
+output "rds_endpoint" {
+  description = "Private endpoint for the RoomSphere PostgreSQL database"
+  value       = aws_db_instance.roomsphere.endpoint
+}
+
+output "rds_database_name" {
+  value = aws_db_instance.roomsphere.db_name
+}
+
