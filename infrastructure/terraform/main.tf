@@ -92,3 +92,35 @@ output "private_subnet_ids" {
 output "rds_subnet_group_name" {
   value = aws_db_subnet_group.roomsphere.name
 }
+
+resource "aws_s3_bucket_public_access_block" "private_documents" {
+  bucket = "roomsphere-private-docs-rsm-7k29x"
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "private_documents" {
+  bucket = "roomsphere-private-docs-rsm-7k29x"
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "private_documents" {
+  bucket = "roomsphere-private-docs-rsm-7k29x"
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+output "private_documents_bucket_name" {
+  description = "Private S3 bucket for RoomSphere documents"
+  value       = "roomsphere-private-docs-rsm-7k29x"
+}
