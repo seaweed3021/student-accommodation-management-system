@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoomSphere – Student</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header><h1>RoomSphere</h1><nav><a href="#" onclick="signOut();location.href='login.html'">Log out</a></nav></header>
+  <section>
+    <h2>Student dashboard</h2>
+    <p id="who"></p>
+    <h3>My applications</h3><p>Coming soon (sample data).</p>
+    <h3>Report a maintenance issue</h3><p>Coming soon.</p>
+  </section>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    requireLogin((groups) => {
+      document.getElementById('who').textContent = 'Signed in. Groups: ' + (groups.join(', ') || 'none');
+    });
+  </script>
+</body>
+</html>

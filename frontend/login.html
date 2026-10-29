@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RoomSphere – Log in</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header><h1>RoomSphere</h1><nav><a href="index.html">Home</a></nav></header>
+
+  <section>
+    <h2>Sign up</h2>
+    <input id="su-email" type="email" placeholder="Email">
+    <input id="su-pass" type="password" placeholder="Password (8+ chars, upper, lower, number, symbol)">
+    <button onclick="doSignUp()">Sign up</button>
+
+    <h2>Confirm your email</h2>
+    <input id="cf-email" type="email" placeholder="Email">
+    <input id="cf-code" type="text" placeholder="6-digit code">
+    <button onclick="doConfirm()">Confirm</button>
+
+    <h2>Log in</h2>
+    <input id="li-email" type="email" placeholder="Email">
+    <input id="li-pass" type="password" placeholder="Password">
+    <button onclick="doLogin()">Log in</button>
+
+    <p id="msg"></p>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    const val = (id) => document.getElementById(id).value.trim();
+    const show = (t) => { document.getElementById('msg').textContent = t; };
+
+    function doSignUp() {
+      signUp(val('su-email'), document.getElementById('su-pass').value,
+        () => { document.getElementById('cf-email').value = val('su-email'); show('Check your email for a 6-digit code, then confirm below.'); },
+        (err) => show('Error: ' + err.message));
+    }
+    function doConfirm() {
+      confirmSignUp(val('cf-email'), val('cf-code'),
+        () => show('Confirmed! You can log in now.'),
+        (err) => show('Error: ' + err.message));
+    }
+    function doLogin() {
+      signIn(val('li-email'), document.getElementById('li-pass').value,
+        (groups) => { window.location.href = groups.includes('landlord') ? 'owner.html' : 'customer.html'; },
+        (err) => show('Error: ' + err.message));
+    }
+  </script>
+</body>
+</html>
