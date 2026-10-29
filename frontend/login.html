@@ -5,50 +5,143 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>RoomSphere – Log in</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .auth-card { max-width: 380px; margin: 40px auto; padding: 28px; border: 1px solid #ccc; border-radius: 8px; }
+    .auth-card h2 { margin-top: 0; }
+    .auth-card label { display: block; margin: 14px 0 4px; font-size: 14px; }
+    .auth-card input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #aaa; border-radius: 6px; font-size: 16px; }
+    .auth-card button.primary { width: 100%; margin-top: 18px; padding: 12px; background: #1f3a5f; color: #fff; border: 0; border-radius: 6px; font-size: 16px; cursor: pointer; }
+    .auth-card .link { background: none; border: 0; color: #1f3a5f; text-decoration: underline; cursor: pointer; padding: 0; font-size: 14px; }
+    .switch { margin-top: 16px; font-size: 14px; }
+    #msg { margin-top: 14px; min-height: 20px; font-size: 14px; }
+    #msg.error { color: #b00020; }
+    #msg.ok { color: #0a7a2f; }
+    .hidden { display: none; }
+  </style>
 </head>
 <body>
-  <header><h1>RoomSphere</h1><nav><a href="index.html">Home</a></nav></header>
+  <header>
+    <h1>RoomSphere</h1>
+    <nav><a href="index.html">Home</a></nav>
+  </header>
 
-  <section>
-    <h2>Sign up</h2>
-    <input id="su-email" type="email" placeholder="Email">
-    <input id="su-pass" type="password" placeholder="Password (8+ chars, upper, lower, number, symbol)">
-    <button onclick="doSignUp()">Sign up</button>
+  <div class="auth-card">
 
-    <h2>Confirm your email</h2>
-    <input id="cf-email" type="email" placeholder="Email">
-    <input id="cf-code" type="text" placeholder="6-digit code">
-    <button onclick="doConfirm()">Confirm</button>
+    <!-- VIEW 1: LOG IN -->
+    <div id="view-login">
+      <h2>Log in</h2>
+      <form onsubmit="doLogin(event)">
+        <label for="li-email">Email</label>
+        <input id="li-email" type="email" required>
+        <label for="li-pass">Password</label>
+        <input id="li-pass" type="password" required>
+        <button class="primary" type="submit">Log in</button>
+      </form>
+      <p class="switch">New here? <button class="link" onclick="showView('signup')">Create an account</button></p>
+    </div>
 
-    <h2>Log in</h2>
-    <input id="li-email" type="email" placeholder="Email">
-    <input id="li-pass" type="password" placeholder="Password">
-    <button onclick="doLogin()">Log in</button>
+    <!-- VIEW 2: SIGN UP -->
+    <div id="view-signup" class="hidden">
+      <h2>Create account</h2>
+      <form onsubmit="doSignUp(event)">
+        <label for="su-email">Email</label>
+        <input id="su-email" type="email" required>
+        <label for="su-pass">Password</label>
+        <input id="su-pass" type="password" placeholder="8+ chars, upper, lower, number, symbol" required>
+        <button class="primary" type="submit">Sign up</button>
+      </form>
+      <p class="switch">Already have an account? <button class="link" onclick="showView('login')">Log in</button></p>
+    </div>
+
+    <!-- VIEW 3: CONFIRM -->
+    <div id="view-confirm" class="hidden">
+      <h2>Confirm your email</h2>
+      <p>We sent a 6-digit code to <strong id="confirm-email"></strong></p>
+      <form onsubmit="doConfirm(event)">
+        <label for="cf-code">6-digit code</label>
+        <input id="cf-code" type="text" inputmode="numeric" maxlength="6" required>
+        <button class="primary" type="submit">Confirm</button>
+      </form>
+      <p class="switch">
+        <button class="link" onclick="doResend()">Resend code</button> ·
+        <button class="link" onclick="showView('login')">Back to log in</button>
+      </p>
+    </div>
 
     <p id="msg"></p>
-  </section>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script>
+    let pendingEmail = '';
     const val = (id) => document.getElementById(id).value.trim();
-    const show = (t) => { document.getElementById('msg').textContent = t; };
 
-    function doSignUp() {
-      signUp(val('su-email'), document.getElementById('su-pass').value,
-        () => { document.getElementById('cf-email').value = val('su-email'); show('Check your email for a 6-digit code, then confirm below.'); },
-        (err) => show('Error: ' + err.message));
+    function setMsg(text, type) {
+      const m = document.getElementById('msg');
+      m.textContent = text || '';
+      m.className = type || '';
     }
-    function doConfirm() {
-      confirmSignUp(val('cf-email'), val('cf-code'),
-        () => show('Confirmed! You can log in now.'),
-        (err) => show('Error: ' + err.message));
+
+    function showView(name) {
+      ['login', 'signup', 'confirm'].forEach((v) =>
+        document.getElementById('view-' + v).classList.toggle('hidden', v !== name));
+      setMsg('');
     }
-    function doLogin() {
-      signIn(val('li-email'), document.getElementById('li-pass').value,
-        (groups) => { window.location.href = groups.includes('landlord') ? 'owner.html' : 'customer.html'; },
-        (err) => show('Error: ' + err.message));
+
+    function goToConfirm(email) {
+      pendingEmail = email;
+      document.getElementById('confirm-email').textContent = email;
+      document.getElementById('cf-code').value = '';
+      showView('confirm');
+    }
+
+    function doSignUp(e) {
+      e.preventDefault();
+      const email = val('su-email');
+      signUp(email, document.getElementById('su-pass').value,
+        () => {
+          document.getElementById('su-pass').value = '';
+          goToConfirm(email);
+          setMsg('Check your email for the 6-digit code.', 'ok');
+        },
+        (err) => setMsg(err.message, 'error'));
+    }
+
+    function doConfirm(e) {
+      e.preventDefault();
+      confirmSignUp(pendingEmail, val('cf-code'),
+        () => {
+          showView('login');
+          document.getElementById('li-email').value = pendingEmail;
+          document.getElementById('li-pass').value = '';
+          setMsg('Email confirmed! Please log in.', 'ok');
+        },
+        (err) => setMsg(err.message, 'error'));
+    }
+
+    function doResend() {
+      resendCode(pendingEmail,
+        () => setMsg('A new code was sent.', 'ok'),
+        (err) => setMsg(err.message, 'error'));
+    }
+
+    function doLogin(e) {
+      e.preventDefault();
+      const email = val('li-email');
+      signIn(email, document.getElementById('li-pass').value,
+        (groups) => {
+          window.location.href = groups.includes('landlord') ? 'owner.html' : 'customer.html';
+        },
+        (err) => {
+          if (err.code === 'UserNotConfirmedException') {
+            goToConfirm(email);
+            setMsg('Please confirm your email first. Enter the code we sent.', 'error');
+          } else {
+            setMsg(err.message, 'error');
+          }
+        });
     }
   </script>
 </body>

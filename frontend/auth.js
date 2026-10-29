@@ -13,6 +13,11 @@ function confirmSignUp(email, code, onOk, onErr) {
   user.confirmRegistration(code, true, (err, res) => err ? onErr(err) : onOk(res));
 }
 
+function resendCode(email, onOk, onErr) {
+  const user = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
+  user.resendConfirmationCode((err, res) => err ? onErr(err) : onOk(res));
+}
+
 function signIn(email, password, onOk, onErr) {
   const user = new AmazonCognitoIdentity.CognitoUser({ Username: email, Pool: userPool });
   const details = new AmazonCognitoIdentity.AuthenticationDetails({ Username: email, Password: password });
