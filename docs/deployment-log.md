@@ -27,3 +27,15 @@ Note: No AWS keys are used for this deployment.
 | Duration | 33 seconds |
 | Result | Success |
 | Errors and fixes | None |
+
+## Deployment 3 – Homepage link and login flow
+
+| Item | Detail |
+|---|---|
+| Date | 29 Oct 2026 |
+| What was deployed | index.html (login link), login.html (sign up / confirm / log in steps), auth.js |
+| Method | GitHub Actions "Deploy front end to GitHub Pages" (runs #3 and #4) |
+| Trigger | Merge of PR #10 (commit 12ac7ff) and PR #11 (commit a098991) into main |
+| Duration | 17 seconds each |
+| Result | Success |
+| Errors and fixes | None |
