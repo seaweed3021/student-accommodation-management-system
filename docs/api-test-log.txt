@@ -1,5 +1,5 @@
 RoomSphere API local test, 2026-11-01, Postgres 16, handler run directly with simulated API Gateway events
-Not yet run on AWS.
+Not yet run on AWS. Self-signed-up users carry no Cognito group; only 'landlord' is special.
 
 {'loaded': True, 'tables': ['applications', 'maintenance_requests', 'properties', 'room_photos', 'rooms', 'tenancies', 'users']}
 {'loaded': False, 'reason': 'schema already present'}
@@ -8,8 +8,8 @@ GET /rooms                             200 [{"room_id": 1, "title": "Room A", "d
 GET /rooms/2                           200 {"room_id": 2, "title": "Room B", "description": "Quiet room, shared bath", "monthly_rent": 790.0, "status": "
 GET /rooms/99                          404 {"error": "room not found"}
 GET /rooms/abc                         400 {"error": "invalid room id"}
-POST apply, no token                   403 {"error": "students only"}
-POST apply, landlord token             403 {"error": "students only"}
+POST apply, no token                   401 {"error": "sign in required"}
+POST apply, landlord token             403 {"error": "customers only"}
 POST apply, bad body                   400 {"error": "room_id and move_in_date are required"}
 POST apply, bad date                   400 {"error": "move_in_date must be YYYY-MM-DD"}
 POST apply, no room                    404 {"error": "room not found"}
