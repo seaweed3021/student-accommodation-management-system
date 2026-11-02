@@ -1,0 +1,40 @@
+digraph G {
+  rankdir=TB; bgcolor="white"; fontname="Helvetica"; nodesep=0.45; ranksep=0.6; compound=true;
+  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=15, margin="0.18,0.1"];
+  edge [fontname="Helvetica", fontsize=12, color="#444444"];
+
+  user [label="Student / Landlord\n(browser)", fillcolor="#FFFFFF", color="#1F3A5F"];
+
+  subgraph cluster_public {
+    label="PUBLIC (internet-facing)"; fontsize=15; fontname="Helvetica-Bold"; style="rounded,dashed"; color="#B5651D";
+    pages [label="Front end\nGitHub Pages (HTTPS)\ndeployed by GitHub Actions", fillcolor="#E3F1E3", color="#2E7D32"];
+    cognito [label="Identity\nAmazon Cognito user pool\ngroups: landlord, student", fillcolor="#E3F1E3", color="#2E7D32"];
+    apigw [label="API\nAPI Gateway (HTTP API)\nJWT authorizer", fillcolor="#FFF4D6", color="#B58900"];
+  }
+
+  subgraph cluster_private {
+    label="PRIVATE (VPC private subnets, no internet route)"; fontsize=15; fontname="Helvetica-Bold"; style="rounded,dashed"; color="#1F3A5F";
+    lam [label="Business logic\nLambda (Python)\nsecurity group: app", fillcolor="#FFF4D6", color="#B58900"];
+    init [label="One-time schema loader\nLambda", fillcolor="#FFF4D6", color="#B58900"];
+    rds [label="Database\nRDS PostgreSQL 16\nsecurity group: db\n(accepts only app SG, port 5432)", fillcolor="#E3F1E3", color="#2E7D32"];
+    s3 [label="Documents\nS3 private bucket\nblock public access, encrypted", fillcolor="#E3F1E3", color="#2E7D32"];
+  }
+
+  logs [label="CloudWatch Logs", fillcolor="#FFF4D6", color="#B58900"];
+
+  user -> pages [label="1  load site"];
+  user -> cognito [label="2  sign up / sign in\n(returns JWT)"];
+  user -> apigw [label="3  API call + JWT"];
+  apigw -> cognito [label="validates token", style=dashed];
+  apigw -> lam [label="4  invoke"];
+  lam -> rds [label="5  SQL (pg8000)"];
+  init -> rds [label="schema.sql", style=dashed];
+  lam -> logs [style=dashed];
+  lam -> s3 [label="planned: pre-signed\nURLs for photos", style=dotted, color="#999999", fontcolor="#777777"];
+
+  legend [shape=plaintext, style="", fontsize=13, label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">
+    <TR><TD BGCOLOR="#E3F1E3">built and running</TD></TR>
+    <TR><TD BGCOLOR="#FFF4D6">code merged, not yet deployed</TD></TR>
+    <TR><TD>dotted line: planned</TD></TR></TABLE>>];
+  logs -> legend [style=invis];
+}
