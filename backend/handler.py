@@ -4,7 +4,7 @@ Routes
   GET  /health            public
   GET  /rooms             public, lists rooms
   GET  /rooms/{id}        public
-  POST /applications      student group only: apply for a room
+  POST /applications      any signed-in customer (not in the landlord group)
   GET  /applications      landlord group only: list all applications
 
 API Gateway validates the Cognito JWT before this code runs. The handler
@@ -142,9 +142,12 @@ def handler(event, context):
 
         claims = _claims(event)
         groups = _groups(claims)
+        if not claims.get("sub"):
+            return _resp(401, {"error": "sign in required"})
         if route == "POST /applications":
-            if "student" not in groups:
-                return _resp(403, {"error": "students only"})
+            # Self-signed-up users have no Cognito group; only the landlord group is special.
+            if "landlord" in groups:
+                return _resp(403, {"error": "customers only"})
             return _apply(event, claims)
         if route == "GET /applications":
             if "landlord" not in groups:

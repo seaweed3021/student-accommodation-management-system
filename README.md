@@ -69,18 +69,19 @@ The project will be considered successful when:
 
 Our team plans to develop and test the application using the AWS Academy Learner Lab environment.
 
-Potential AWS services include:
+Services in use or planned (see `docs/architecture-v1.png`):
 
-| AWS Service                 | Intended Purpose                 |
-| --------------------------- | -------------------------------- |
-| Amazon EC2                  | Application hosting              |
-| Amazon RDS                  | Relational database              |
-| Amazon S3                   | Property images and file storage |
-| Amazon Cognito              | User authentication              |
-| Amazon CloudWatch           | Application monitoring           |
-| AWS IAM and Security Groups | Access control and security      |
+| AWS / other service         | Purpose                                              | Status |
+| --------------------------- | ---------------------------------------------------- | ------ |
+| GitHub Pages + Actions      | Front end hosting and automatic deployment           | Live |
+| Amazon Cognito              | Sign up, sign in, landlord group                     | Live |
+| Amazon RDS (PostgreSQL)     | Relational database in private subnets               | Created |
+| Amazon S3 (private)         | Property images and documents                        | Created |
+| API Gateway + AWS Lambda    | API with JWT authorizer (`backend/`, `api.tf`)       | Code merged, not yet deployed |
+| Amazon CloudWatch           | Logs and monitoring                                  | With Lambda |
+| Security groups, LabRole    | Access control (see `docs/security.md`)              | In place |
 
-The final services will depend on project requirements and the permissions available in the Learner Lab environment.
+CloudFront is blocked in the Learner Lab, so the front end is on GitHub Pages instead of S3 + CloudFront.
 
 ## Why Cloud?
 
@@ -98,6 +99,10 @@ Our main goals are to:
 
 ## Project Status
 
-**Current Stage:** Project Planning and Initial Design
+**Current stage:** early build.
 
-Further development, AWS resource configuration, database integration, and application testing will be completed during the upcoming project phases.
+- Done: data model and tested schema (`db/`), private network, RDS and S3 in Terraform, front end on GitHub Pages with Cognito sign up and sign in, owner and customer views.
+- Code merged, not yet deployed: rooms and applications API (`backend/`, `docs/api.md`).
+- Not started: front end wired to the API, maintenance requests API, document upload, monitoring alarms.
+
+Docs: `docs/architecture-v1.png`, `docs/data-model.md`, `docs/api.md`, `docs/security.md`, `docs/deployment-log.md`.

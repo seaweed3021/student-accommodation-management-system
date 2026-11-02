@@ -9,10 +9,10 @@ API Gateway checks the Cognito JWT on protected routes before the Lambda runs. T
 | GET /health | none | anyone | checks the database connection |
 | GET /rooms | none | anyone | lists rooms with property and rent |
 | GET /rooms/{id} | none | anyone | one room, 404 if missing |
-| POST /applications | JWT | student group | creates an application (body: room_id, move_in_date, message). Creates the users row from the token on first use |
+| POST /applications | JWT | any signed-in customer (not in the landlord group) | creates an application (body: room_id, move_in_date, message). Creates the users row from the token on first use |
 | GET /applications | JWT | landlord group | lists all applications |
 
-Errors: 400 bad input, 401 missing or invalid token (API Gateway), 403 wrong group, 404 not found, 500 internal (detail goes to CloudWatch only).
+Send the Cognito **ID token** as `Authorization: Bearer <token>` (the authorizer checks the `aud` claim, which only the ID token carries). Errors: 400 bad input, 401 missing or invalid token (API Gateway), 403 wrong group, 404 not found, 500 internal (detail goes to CloudWatch only).
 
 ## Design notes
 - The Lambda runs in the private subnets with the `app` security group, the only source the database security group accepts. There is no NAT, so the Lambda cannot reach the internet or Secrets Manager.
