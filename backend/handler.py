@@ -30,6 +30,7 @@ def _db():
     if _conn is None:
         _conn = pg8000.native.Connection(
             host=os.environ["DB_HOST"],
+            port=int(os.environ.get("DB_PORT", "5432")),
             database=os.environ.get("DB_NAME", "roomsphere"),
             user=os.environ.get("DB_USER", "roomsphere_admin"),
             password=os.environ["DB_PASSWORD"],

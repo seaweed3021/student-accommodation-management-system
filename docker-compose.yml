@@ -1,0 +1,14 @@
+# Local development database: Postgres 16 with the schema and demo rooms loaded on first start.
+# Not used on AWS (there the database is RDS, see infrastructure/terraform).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: roomsphere
+      POSTGRES_USER: roomsphere_admin
+      POSTGRES_PASSWORD: localdev-password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
