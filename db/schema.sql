@@ -59,6 +59,18 @@ CREATE TABLE tenancies (
     end_date       DATE
 );
 
+-- Deposit payments. Mock provider: stands in for a payment gateway sandbox, stores no card data.
+CREATE TABLE payments (
+    payment_id     SERIAL PRIMARY KEY,
+    application_id INT           NOT NULL UNIQUE REFERENCES applications(application_id),
+    amount         NUMERIC(8,2)  NOT NULL CHECK (amount > 0),
+    kind           VARCHAR(10)   NOT NULL DEFAULT 'deposit',
+    status         VARCHAR(10)   NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'refunded')),
+    provider       VARCHAR(10)   NOT NULL DEFAULT 'mock',
+    reference      VARCHAR(40)   NOT NULL UNIQUE,
+    paid_at        TIMESTAMP     NOT NULL DEFAULT now()
+);
+
 CREATE TABLE maintenance_requests (
     request_id   SERIAL PRIMARY KEY,
     tenancy_id   INT          NOT NULL REFERENCES tenancies(tenancy_id),

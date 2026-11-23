@@ -4,16 +4,21 @@ Routes
   GET  /health            public
   GET  /rooms             public, lists rooms
   GET  /rooms/{id}        public
-  POST /applications      any signed-in customer (not in the landlord group)
-  GET  /applications      landlord group only: list all applications
+  POST /applications               any signed-in customer (not in the landlord group)
+  GET  /applications/mine          the signed-in customer's own applications
+  POST /applications/{id}/payment  the owning customer pays the deposit (mock provider)
+  GET  /applications               landlord group only: list all applications
+  PATCH /applications/{id}         landlord group only: approve or reject
+  GET  /dashboard                  landlord group only: live numbers for the owner dashboard
 
 API Gateway validates the Cognito JWT before this code runs. The handler
 then checks the cognito:groups claim, so the owner role has elevated access.
 """
 import json
 import os
-from decimal import Decimal
 import re
+import uuid
+from decimal import Decimal
 
 import pg8000.native
 
@@ -125,6 +130,184 @@ def _applications():
     return [dict(zip(keys, r)) for r in rows]
 
 
+_sns_client = None
+
+
+def _notify(subject, message):
+    """Best-effort SNS publish. A messaging failure never fails the API call.
+
+    Returns True if SNS accepted the message. Runs over the SNS VPC endpoint
+    because the private subnets have no NAT.
+    """
+    global _sns_client
+    topic = os.environ.get("TOPIC_ARN")
+    if not topic:
+        return False
+    try:
+        if _sns_client is None:
+            import boto3
+            from botocore.config import Config
+            _sns_client = boto3.client(
+                "sns",
+                region_name=os.environ.get("AWS_REGION", "us-east-1"),
+                config=Config(connect_timeout=2, read_timeout=3, retries={"max_attempts": 1}),
+            )
+        _sns_client.publish(TopicArn=topic, Subject=subject[:100], Message=message)
+        return True
+    except Exception as exc:
+        print("NOTIFY_FAILED", repr(exc))
+        return False
+
+
+def _tx(fn):
+    """Run fn() inside one database transaction (all-or-nothing)."""
+    _run("START TRANSACTION")
+    try:
+        out = fn()
+        _run("COMMIT")
+        return out
+    except Exception:
+        try:
+            _run("ROLLBACK")
+        except Exception:
+            pass
+        raise
+
+
+def _app_id(event):
+    try:
+        return int(event["pathParameters"]["id"])
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def _my_user_id(sub):
+    rows = _run("SELECT user_id FROM users WHERE cognito_sub = :s", s=sub)
+    return rows[0][0] if rows else None
+
+
+def _my_applications(claims):
+    uid = _my_user_id(claims["sub"])
+    if uid is None:
+        return []
+    rows = _run(
+        "SELECT a.application_id, r.title, r.monthly_rent, a.status, a.move_in_date, "
+        "a.submitted_at, a.decided_at, p.status, p.reference "
+        "FROM applications a JOIN rooms r USING(room_id) "
+        "LEFT JOIN payments p ON p.application_id = a.application_id "
+        "WHERE a.student_id = :u ORDER BY a.application_id DESC", u=uid)
+    keys = ["application_id", "room", "monthly_rent", "status", "move_in_date",
+            "submitted_at", "decided_at", "payment_status", "payment_reference"]
+    return [dict(zip(keys, r)) for r in rows]   # landlord_note is never selected
+
+
+def _decide(event, claims):
+    app_id = _app_id(event)
+    if app_id is None:
+        return _resp(400, {"error": "invalid application id"})
+    try:
+        data = json.loads(event.get("body") or "{}")
+        new_status = data["status"]
+    except (ValueError, KeyError, TypeError):
+        return _resp(400, {"error": "status is required"})
+    if new_status not in ("approved", "rejected"):
+        return _resp(400, {"error": "status must be approved or rejected"})
+    note = data.get("landlord_note")
+    if note is not None and len(str(note)) > 1000:
+        return _resp(400, {"error": "landlord_note too long"})
+
+    cur = _run("SELECT a.status, r.status, r.title FROM applications a "
+               "JOIN rooms r USING(room_id) WHERE a.application_id = :i", i=app_id)
+    if not cur:
+        return _resp(404, {"error": "application not found"})
+    if new_status == "approved" and cur[0][1] != "available":
+        return _resp(409, {"error": "room is no longer available"})
+    # conditional update: only an undecided application can be decided (no double decisions)
+    row = _run(
+        "UPDATE applications SET status = :s, landlord_note = :n, decided_at = now() "
+        "WHERE application_id = :i AND status IN ('submitted', 'under_review') "
+        "RETURNING application_id, status", s=new_status, n=note, i=app_id)
+    if not row:
+        return _resp(409, {"error": "application already " + cur[0][0]})
+    sent = _notify(
+        "RoomSphere: application %d %s" % (app_id, new_status),
+        "Application %d for %s was %s." % (app_id, cur[0][2], new_status))
+    return _resp(200, {"application_id": row[0][0], "status": row[0][1], "notification_sent": sent})
+
+
+def _pay(event, claims):
+    """Mock deposit payment (stands in for Stripe sandbox; no card data is stored)."""
+    app_id = _app_id(event)
+    if app_id is None:
+        return _resp(400, {"error": "invalid application id"})
+    try:
+        data = json.loads(event.get("body") or "{}")
+    except ValueError:
+        return _resp(400, {"error": "invalid JSON"})
+    last4 = str(data.get("card_last4", "4242"))
+    if not re.fullmatch(r"\d{4}", last4):
+        return _resp(400, {"error": "card_last4 must be 4 digits"})
+
+    uid = _my_user_id(claims["sub"])
+    rows = _run(
+        "SELECT a.status, a.room_id, a.move_in_date, r.monthly_rent, r.title "
+        "FROM applications a JOIN rooms r USING(room_id) "
+        "WHERE a.application_id = :i AND a.student_id = :u", i=app_id, u=uid)
+    if not rows:   # not found OR not yours: same answer, no information leak
+        return _resp(404, {"error": "application not found"})
+    status, room_id, move_in, rent, title = rows[0]
+    if status != "approved":
+        return _resp(409, {"error": "application must be approved before payment"})
+    if last4 == "0002":   # test card that always declines, to demo error handling
+        return _resp(402, {"error": "card declined"})
+    ref = "MOCK-" + uuid.uuid4().hex[:12].upper()
+
+    def work():
+        if _run("SELECT 1 FROM payments WHERE application_id = :i", i=app_id):
+            return None
+        locked = _run("UPDATE rooms SET status = 'occupied' "
+                      "WHERE room_id = :r AND status = 'available' RETURNING room_id", r=room_id)
+        if not locked:
+            return "room"
+        _run("INSERT INTO payments(application_id, amount, reference) VALUES (:i, :a, :ref)",
+             i=app_id, a=rent, ref=ref)
+        _run("INSERT INTO tenancies(application_id, room_id, student_id, start_date) "
+             "VALUES (:i, :r, :u, :d)", i=app_id, r=room_id, u=uid, d=move_in)
+        return "ok"
+
+    result = _tx(work)
+    if result is None:
+        return _resp(409, {"error": "already paid"})
+    if result == "room":
+        return _resp(409, {"error": "room is no longer available"})
+    sent = _notify("RoomSphere: payment received (%s)" % ref,
+                   "Deposit of %.2f received for %s. Reference %s." % (float(rent), title, ref))
+    return _resp(201, {"payment_reference": ref, "amount": rent, "status": "paid",
+                       "notification_sent": sent})
+
+
+def _dashboard():
+    rooms = {r[0]: r[1] for r in _run("SELECT status, count(*) FROM rooms GROUP BY status")}
+    apps = {r[0]: r[1] for r in _run("SELECT status, count(*) FROM applications GROUP BY status")}
+    total_rooms = sum(rooms.values())
+    occupied = rooms.get("occupied", 0)
+    money = _run("SELECT COALESCE(SUM(amount), 0), count(*) FROM payments WHERE status = 'paid'")[0]
+    potential = _run("SELECT COALESCE(SUM(monthly_rent), 0) FROM rooms WHERE status = 'occupied'")[0][0]
+    recent = _applications()[-5:][::-1]
+    return {
+        "rooms": {"total": total_rooms, "available": rooms.get("available", 0),
+                  "occupied": occupied, "unavailable": rooms.get("unavailable", 0)},
+        "occupancy_rate": round(100.0 * occupied / total_rooms, 1) if total_rooms else 0.0,
+        "applications": {"total": sum(apps.values()),
+                         "pending": apps.get("submitted", 0) + apps.get("under_review", 0),
+                         "approved": apps.get("approved", 0), "rejected": apps.get("rejected", 0)},
+        "monthly_rent_roll": potential,
+        "deposits_collected": money[0],
+        "payments_count": money[1],
+        "recent_applications": recent,
+    }
+
+
 def handler(event, context):
     route = event.get("routeKey") or ""
     try:
@@ -149,10 +332,20 @@ def handler(event, context):
             if "landlord" in groups:
                 return _resp(403, {"error": "customers only"})
             return _apply(event, claims)
-        if route == "GET /applications":
+        if route in ("GET /applications/mine", "POST /applications/{id}/payment"):
+            if "landlord" in groups:
+                return _resp(403, {"error": "customers only"})
+            if route == "GET /applications/mine":
+                return _resp(200, _my_applications(claims))
+            return _pay(event, claims)
+        if route in ("GET /applications", "PATCH /applications/{id}", "GET /dashboard"):
             if "landlord" not in groups:
                 return _resp(403, {"error": "landlord only"})
-            return _resp(200, _applications())
+            if route == "GET /applications":
+                return _resp(200, _applications())
+            if route == "GET /dashboard":
+                return _resp(200, _dashboard())
+            return _decide(event, claims)
         return _resp(404, {"error": "not found"})
     except Exception as exc:  # log the detail, never return it to the client
         print("ERROR", route, repr(exc))

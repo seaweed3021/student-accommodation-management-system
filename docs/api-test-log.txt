@@ -1,20 +1,44 @@
-RoomSphere API local test, 2026-11-01, Postgres 16, handler run directly with simulated API Gateway events
-Not yet run on AWS. Self-signed-up users carry no Cognito group; only 'landlord' is special.
+RoomSphere API v2 local test, 2026-11-21, Postgres 16, handler run directly with simulated API Gateway events and a fake SNS client
+Not yet run on AWS. Self-signed-up users carry no Cognito group; only landlord is special.
 
-{'loaded': True, 'tables': ['applications', 'maintenance_requests', 'properties', 'room_photos', 'rooms', 'tenancies', 'users']}
-{'loaded': False, 'reason': 'schema already present'}
-GET /health                            200 {"status": "ok"}
-GET /rooms                             200 [{"room_id": 1, "title": "Room A", "description": "Bright room with desk", "monthly_rent": 850.0, "status": "a
-GET /rooms/2                           200 {"room_id": 2, "title": "Room B", "description": "Quiet room, shared bath", "monthly_rent": 790.0, "status": "
-GET /rooms/99                          404 {"error": "room not found"}
-GET /rooms/abc                         400 {"error": "invalid room id"}
-POST apply, no token                   401 {"error": "sign in required"}
-POST apply, landlord token             403 {"error": "customers only"}
-POST apply, bad body                   400 {"error": "room_id and move_in_date are required"}
-POST apply, bad date                   400 {"error": "move_in_date must be YYYY-MM-DD"}
-POST apply, no room                    404 {"error": "room not found"}
-POST apply, student ok                 201 {"application_id": 1, "status": "submitted"}
-POST apply again (2nd)                 201 {"application_id": 2, "status": "submitted"}
-GET apps, student token                403 {"error": "landlord only"}
-GET apps, landlord token               200 [{"application_id": 1, "room": "Room A", "student": "stu@x.com", "status": "submitted", "move_in_date": "2026-
-unknown route                          404 {"error": "not found"}
+{'loaded': True, 'tables': ['applications', 'maintenance_requests', 'payments', 'properties', 'room_photos', 'rooms', 'tenancies', 'users']}
+GET /health                                  200 {"status": "ok"}
+GET /rooms (public)                          200 [{"room_id": 1, "title": "Room A", "description": "Bright room with desk", "monthly_rent": 850.0, "status": "a
+dashboard, no token                          401 {"error": "sign in required"}
+dashboard, student                           403 {"error": "landlord only"}
+dashboard, landlord (empty)                  200 {"rooms": {"total": 3, "available": 2, "occupied": 1, "unavailable": 0}, "occupancy_rate": 33.3, "applications
+S1 applies room 1                            201 {"application_id": 1, "status": "submitted"}
+S2 applies room 1                            201 {"application_id": 2, "status": "submitted"}
+my applications S1 (own only)                200 [{"application_id": 1, "room": "Room A", "monthly_rent": 850.0, "status": "submitted", "move_in_date": "2026-1
+my applications, landlord                    403 {"error": "customers only"}
+my applications, no token                    401 {"error": "sign in required"}
+dashboard: 2 pending                         200 {"rooms": {"total": 3, "available": 2, "occupied": 1, "unavailable": 0}, "occupancy_rate": 33.3, "applications
+PATCH by student                             403 {"error": "landlord only"}
+PATCH bad status                             400 {"error": "status must be approved or rejected"}
+PATCH missing status                         400 {"error": "status is required"}
+PATCH bad id                                 400 {"error": "invalid application id"}
+PATCH unknown app                            404 {"error": "application not found"}
+approve S1                                   200 {"application_id": 1, "status": "approved", "notification_sent": true}
+approve S1 again (double decision)           409 {"error": "application already approved"}
+pay before approval (S2)                     409 {"error": "application must be approved before payment"}
+S2 cannot pay S1's application               404 {"error": "application not found"}
+landlord cannot pay                          403 {"error": "customers only"}
+pay bad card_last4                           400 {"error": "card_last4 must be 4 digits"}
+pay declined card 0002                       402 {"error": "card declined"}
+my apps: still no payment                    200 [{"application_id": 1, "room": "Room A", "monthly_rent": 850.0, "status": "approved", "move_in_date": "2026-12
+pay OK                                       201 {"payment_reference": "MOCK-540C695B4EEA", "amount": 850.0, "status": "paid", "notification_sent": true}
+pay twice                                    409 {"error": "already paid"}
+room 1 now occupied                          200 {"room_id": 1, "title": "Room A", "description": "Bright room with desk", "monthly_rent": 850.0, "status": "oc
+approve S2 for taken room                    409 {"error": "room is no longer available"}
+reject S2                                    200 {"application_id": 2, "status": "rejected", "notification_sent": true}
+my apps S1 shows payment, hides note         200 [{"application_id": 1, "room": "Room A", "monthly_rent": 850.0, "status": "approved", "move_in_date": "2026-12
+dashboard after flow                         200 {"rooms": {"total": 3, "available": 1, "occupied": 2, "unavailable": 0}, "occupancy_rate": 66.7, "applications
+GET /applications landlord                   200 [{"application_id": 1, "room": "Room A", "student": "stu1@x.com", "status": "approved", "move_in_date": "2026-
+GET /applications student                    403 {"error": "landlord only"}
+S1 applies room 2                            201 {"application_id": 3, "status": "submitted"}
+NOTIFY_FAILED RuntimeError('endpoint unreachable')
+approve with SNS down -> still 200           200 {"application_id": 3, "status": "approved", "notification_sent": false}
+invalid room id                              400 {"error": "invalid room id"}
+unknown route                                404 {"error": "not found"}
+
+FAILED: 0
