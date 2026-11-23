@@ -59,3 +59,7 @@ erDiagram
 - A maintenance request must reference a tenancy, so only approved tenants can raise one.
 - Database credentials are kept in AWS Secrets Manager, never in this repository.
 - Not yet decided: lease documents, payments and notifications are out of scope for v0.
+
+
+## payments (added for the deposit flow)
+One row per paid application (`application_id` is unique, so a second payment is impossible). Columns: amount, kind, status, provider (`mock`), reference, paid_at. A payment creates the tenancy and marks the room occupied in one transaction.

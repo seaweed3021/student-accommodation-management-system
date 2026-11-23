@@ -36,6 +36,7 @@ locals {
     DB_NAME     = aws_db_instance.roomsphere.db_name
     DB_USER     = aws_db_instance.roomsphere.username
     DB_PASSWORD = var.db_password
+    TOPIC_ARN   = aws_sns_topic.notifications.arn
   }
 }
 
@@ -90,7 +91,7 @@ resource "aws_apigatewayv2_api" "api" {
 
   cors_configuration {
     allow_origins = [var.frontend_origin]
-    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_methods = ["GET", "POST", "PATCH", "OPTIONS"]
     allow_headers = ["authorization", "content-type"]
   }
 
@@ -118,7 +119,14 @@ resource "aws_apigatewayv2_integration" "lambda" {
 
 locals {
   public_routes    = ["GET /health", "GET /rooms", "GET /rooms/{id}"]
-  protected_routes = ["POST /applications", "GET /applications"]
+  protected_routes = [
+    "POST /applications",
+    "GET /applications",
+    "GET /applications/mine",
+    "PATCH /applications/{id}",
+    "POST /applications/{id}/payment",
+    "GET /dashboard",
+  ]
 }
 
 resource "aws_apigatewayv2_route" "public" {
