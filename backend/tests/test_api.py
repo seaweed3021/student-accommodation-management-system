@@ -6,12 +6,8 @@ handler.py, then:  pip install pg8000==1.31.2  and  python backend/tests/test_ap
 The SNS client is faked. Remove the copied .sql files afterwards (backend/build.sh does the copy for deploys).
 """
 import json, os, sys
-os.environ.update(DB_HOST="127.0.0.1", DB_NAME="roomsphere", DB_USER="postgres", DB_PASSWORD="x", TOPIC_ARN="arn:aws:sns:us-east-1:000000000000:fake")
+os.environ.update(DB_HOST="127.0.0.1", DB_PORT=os.environ.get("TEST_DB_PORT", "5433"), DB_NAME="roomsphere", DB_USER="postgres", DB_PASSWORD=os.environ.get("TEST_DB_PASSWORD", ""), TOPIC_ARN="arn:aws:sns:us-east-1:000000000000:fake")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import pg8000.native
-# local server uses trust auth; connect on port 5433
-_orig = pg8000.native.Connection
-pg8000.native.Connection = lambda **kw: _orig(port=5433, **kw)
 import handler as h
 
 class FakeSNS:
@@ -61,7 +57,8 @@ t("PATCH bad id", ev("PATCH /applications/{id}", pid="abc", body={"status": "app
 t("PATCH unknown app", ev("PATCH /applications/{id}", pid=999, body={"status": "approved"}, **L), 404)
 n = len(sns.sent)
 t("approve S1", ev("PATCH /applications/{id}", pid=a1, body={"status": "approved", "landlord_note": "good ref"}, **L), 200, lambda b: b["status"] == "approved" and b["notification_sent"])
-assert len(sns.sent) == n + 1, "SNS publish expected"
+if len(sns.sent) != n + 1:
+    raise SystemExit("SNS publish expected")
 t("approve S1 again (double decision)", ev("PATCH /applications/{id}", pid=a1, body={"status": "rejected"}, **L), 409)
 t("pay before approval (S2)", ev("POST /applications/{id}/payment", pid=a2, body={}, **S2), 409)
 t("S2 cannot pay S1's application", ev("POST /applications/{id}/payment", pid=a1, body={}, **S2), 404)
