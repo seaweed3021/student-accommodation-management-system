@@ -10,18 +10,74 @@
   <header><h1>RoomSphere</h1><nav><a href="#" onclick="signOut();location.href='login.html'">Log out</a></nav></header>
   <section>
     <h2>Landlord dashboard</h2>
-    <p id="who"></p>
-    <h3>Listings</h3><p>Coming soon (sample data).</p>
-    <h3>Applications</h3><p>Coming soon (sample data).</p>
-    <h3>Maintenance requests</h3><p>Coming soon (sample data).</p>
+    <p id="message"></p>
+    <h3>Overview</h3>
+    <ul id="stats"></ul>
+    <h3>Applications</h3>
+    <table id="apps">
+      <thead><tr><th>#</th><th>Room</th><th>Student</th><th>Status</th><th>Move-in</th><th>Action</th></tr></thead>
+      <tbody></tbody>
+    </table>
   </section>
   <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="api.js"></script>
   <script>
-    requireLogin((groups) => {
+    async function loadStats() {
+      const s = await apiRequest('/dashboard');
+      const lines = [
+        'Rooms: ' + s.rooms.available + ' available, ' + s.rooms.occupied + ' occupied (of ' + s.rooms.total + ')',
+        'Occupancy rate: ' + s.occupancy_rate + '%',
+        'Applications: ' + s.applications.pending + ' pending, ' + s.applications.approved + ' approved, ' + s.applications.rejected + ' rejected',
+        'Monthly rent roll: $' + Number(s.monthly_rent_roll),
+        'Deposits collected: $' + Number(s.deposits_collected) + ' (' + s.payments_count + ' payments)'
+      ];
+      const list = document.getElementById('stats');
+      list.textContent = '';
+      lines.forEach((line) => list.append(makeEl('li', line)));
+    }
+
+    async function loadApps() {
+      const apps = await apiRequest('/applications');
+      const body = document.querySelector('#apps tbody');
+      body.textContent = '';
+      apps.forEach((a) => {
+        const row = makeEl('tr');
+        [a.application_id, a.room, a.student, a.status, a.move_in_date]
+          .forEach((value) => row.append(makeEl('td', String(value))));
+        const actions = makeEl('td');
+        if (a.status === 'submitted' || a.status === 'under_review') {
+          [['approved', 'Approve'], ['rejected', 'Reject']].forEach(([status, label]) => {
+            const btn = makeEl('button', label);
+            btn.onclick = () => decide(a.application_id, status);
+            actions.append(btn);
+          });
+        }
+        row.append(actions);
+        body.append(row);
+      });
+    }
+
+    async function decide(id, status) {
+      try {
+        const result = await apiRequest('/applications/' + id, 'PATCH', { status: status });
+        showMessage('Application #' + id + ' ' + result.status + '. Notification sent: ' + result.notification_sent, 'ok');
+        await loadApps();
+        await loadStats();
+      } catch (err) {
+        showMessage('Could not update: ' + err.message, 'error');
+      }
+    }
+
+    requireLogin(async (groups) => {
       if (!groups.includes('landlord')) { window.location.href = 'customer.html'; return; }
-      document.getElementById('who').textContent = 'Signed in as landlord.';
+      try {
+        await loadStats();
+        await loadApps();
+      } catch (e) {
+        showMessage('Could not load the page: ' + e.message, 'error');
+      }
     });
   </script>
 </body>

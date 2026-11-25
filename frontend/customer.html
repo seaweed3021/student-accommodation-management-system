@@ -10,16 +10,90 @@
   <header><h1>RoomSphere</h1><nav><a href="#" onclick="signOut();location.href='login.html'">Log out</a></nav></header>
   <section>
     <h2>Student dashboard</h2>
-    <p id="who"></p>
-    <h3>My applications</h3><p>Coming soon (sample data).</p>
-    <h3>Report a maintenance issue</h3><p>Coming soon.</p>
+    <p id="message"></p>
+    <h3>Available rooms</h3>
+    <div id="rooms" class="cards"></div>
+    <h3>My applications</h3>
+    <div id="my-apps"></div>
   </section>
   <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="api.js"></script>
   <script>
-    requireLogin((groups) => {
-      document.getElementById('who').textContent = 'Signed in. Groups: ' + (groups.join(', ') || 'none');
+    async function loadRooms() {
+      const rooms = await apiRequest('/rooms', 'GET', null, false);
+      const box = document.getElementById('rooms');
+      box.textContent = '';
+      rooms.forEach((room) => {
+        const card = makeEl('div', undefined, 'card');
+        card.append(makeEl('h3', room.title));
+        card.append(makeEl('p', room.property + ', ' + room.city));
+        card.append(makeEl('p', '$' + Number(room.monthly_rent) + ' / month'));
+        card.append(makeEl('p', room.status));
+        if (room.status === 'available') {
+          const date = makeEl('input');
+          date.type = 'date';
+          const btn = makeEl('button', 'Apply');
+          btn.onclick = () => applyForRoom(room.room_id, date.value);
+          card.append(date, btn);
+        }
+        box.append(card);
+      });
+    }
+
+    async function applyForRoom(roomId, moveIn) {
+      if (!moveIn) { showMessage('Please choose a move-in date.', 'error'); return; }
+      try {
+        const result = await apiRequest('/applications', 'POST',
+          { room_id: roomId, move_in_date: moveIn, message: 'Applying through RoomSphere.' });
+        showMessage('Application #' + result.application_id + ' submitted (status: ' + result.status + ').', 'ok');
+        await loadMyApps();
+      } catch (err) {
+        showMessage('Could not submit: ' + err.message, 'error');
+      }
+    }
+
+    async function payDeposit(applicationId, last4) {
+      try {
+        const result = await apiRequest('/applications/' + applicationId + '/payment', 'POST', { card_last4: last4 });
+        showMessage('Payment of $' + Number(result.amount) + ' received. Reference: ' + result.payment_reference, 'ok');
+        await loadMyApps();
+        await loadRooms();
+      } catch (err) {
+        showMessage('Payment failed: ' + err.message, 'error');
+      }
+    }
+
+    async function loadMyApps() {
+      const apps = await apiRequest('/applications/mine');
+      const box = document.getElementById('my-apps');
+      box.textContent = '';
+      if (apps.length === 0) box.append(makeEl('p', 'No applications yet.'));
+      apps.forEach((a) => {
+        const row = makeEl('p', a.room + ' - ' + a.status + ' (move-in ' + a.move_in_date + ')');
+        if (a.payment_status) row.append(makeEl('span', ' - deposit ' + a.payment_status + ' (' + a.payment_reference + ')'));
+        if (a.status === 'approved' && !a.payment_status) {
+          const card = makeEl('input');
+          card.value = '4242';
+          card.maxLength = 4;
+          card.size = 4;
+          const btn = makeEl('button', 'Pay deposit ($' + Number(a.monthly_rent) + ')');
+          btn.onclick = () => payDeposit(a.application_id, card.value);
+          row.append(' ', card, ' ', btn);
+        }
+        box.append(row);
+      });
+    }
+
+    requireLogin(async (groups) => {
+      if (groups.includes('landlord')) { window.location.href = 'owner.html'; return; }
+      try {
+        await loadRooms();
+        await loadMyApps();
+      } catch (e) {
+        showMessage('Could not load the page: ' + e.message, 'error');
+      }
     });
   </script>
 </body>
