@@ -24,12 +24,8 @@
 
   <section id="rooms">
     <h2>Available rooms</h2>
-    <p>Sample data only. Live listings coming soon from our API.</p>
-    <div class="cards">
-      <div class="card"><h3>Room A</h3><p>$850 / month</p><p>Available</p></div>
-      <div class="card"><h3>Room B</h3><p>$790 / month</p><p>Available</p></div>
-      <div class="card"><h3>Room C</h3><p>$900 / month</p><p>Occupied</p></div>
-    </div>
+    <p>Live listings from our database. Log in to apply.</p>
+    <div id="room-list" class="cards"><p>Loading rooms...</p></div>
   </section>
 
   <section id="how">
@@ -48,5 +44,25 @@
   </section>
 
   <footer>RoomSphere – CAA900 project, Seneca</footer>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    apiRequest('/rooms', 'GET', null, false)
+      .then((rooms) => {
+        const box = document.getElementById('room-list');
+        box.textContent = '';
+        rooms.forEach((room) => {
+          const card = makeEl('div', undefined, 'card');
+          card.append(makeEl('h3', room.title));
+          card.append(makeEl('p', '$' + Number(room.monthly_rent) + ' / month'));
+          card.append(makeEl('p', room.status));
+          box.append(card);
+        });
+      })
+      .catch(() => {
+        document.getElementById('room-list').textContent = 'Could not load rooms. Is the API running?';
+      });
+  </script>
 </body>
 </html>
