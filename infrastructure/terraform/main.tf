@@ -197,7 +197,7 @@ resource "aws_db_instance" "roomsphere" {
   publicly_accessible    = false
 
   storage_encrypted          = true
-  backup_retention_period    = 0
+  backup_retention_period    = 30
   auto_minor_version_upgrade = true
   apply_immediately          = true
 
