@@ -118,7 +118,8 @@ resource "aws_apigatewayv2_integration" "lambda" {
 }
 
 locals {
-  public_routes    = ["GET /health", "GET /rooms", "GET /rooms/{id}"]
+  public_routes = ["GET /health", "GET /rooms", "GET /rooms/{id}"]
+
   protected_routes = [
     "POST /applications",
     "GET /applications",
@@ -145,11 +146,28 @@ resource "aws_apigatewayv2_route" "protected" {
   authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
 }
 
+# API Gateway stage with structured access logging
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.api.id
   name        = "$default"
   auto_deploy = true
-  tags        = local.common_tags
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+
+    format = jsonencode({
+      requestId      = "$context.requestId"
+      sourceIp       = "$context.identity.sourceIp"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      routeKey       = "$context.routeKey"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+    })
+  }
+
+  tags = local.common_tags
 }
 
 resource "aws_lambda_permission" "apigw" {

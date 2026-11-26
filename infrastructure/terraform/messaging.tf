@@ -48,8 +48,17 @@ resource "aws_vpc_endpoint" "sns" {
 }
 
 # --- logs and alarms ---
+
+# Lambda application logs
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/lambda/${aws_lambda_function.api.function_name}"
+  retention_in_days = 14
+  tags              = local.common_tags
+}
+
+# API Gateway access logs
+resource "aws_cloudwatch_log_group" "api_access" {
+  name              = "/aws/apigateway/roomsphere-api-access"
   retention_in_days = 14
   tags              = local.common_tags
 }
