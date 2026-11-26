@@ -435,13 +435,21 @@ def init_handler(event, _context):
         conn.close()
         return {"existing_tables": tables}
 
+    here = os.path.dirname(__file__)
+
     # Avoid reinitializing an existing database.
     exists = conn.run("SELECT to_regclass('public.users')")[0][0]
     if exists:
+        # Tables exist but the demo rooms were never loaded: add them, only if there are no rooms yet.
+        if event.get("seed") and conn.run("SELECT count(*) FROM rooms")[0][0] == 0:
+            with open(os.path.join(here, "seed.sql"), encoding="utf-8") as f:
+                conn.run(f.read())
+            rooms = conn.run("SELECT count(*) FROM rooms")[0][0]
+            conn.close()
+            return {"loaded": False, "seeded": True, "rooms": rooms}
         conn.close()
         return {"loaded": False, "reason": "schema already present"}
 
-    here = os.path.dirname(__file__)
     with open(os.path.join(here, "schema.sql"), encoding="utf-8") as f:
         conn.run(f.read())
     if event.get("seed"):
