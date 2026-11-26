@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 rm -rf build && mkdir build
-pip install --quiet --target build -r requirements.txt
+pip install --only-binary :all: --quiet --target build -r requirements.txt
 cp handler.py build/
 cp ../db/schema.sql ../db/seed.sql build/
 echo "built backend/build"
