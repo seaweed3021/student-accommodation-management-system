@@ -1,0 +1,5 @@
+# Local backend backup
+/backend.local-old/
+
+# Terraform state backup
+/infrastructure/terraform/roomsphere-state-backup.json

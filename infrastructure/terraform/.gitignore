@@ -7,3 +7,9 @@ terraform.tfvars
 crash.log
 
 api.zip
+
+# Additional Terraform backups and generated plans
+*.backup
+*.tfplan
+*.zip
+roomsphere-state-backup.json

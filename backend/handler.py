@@ -425,18 +425,32 @@ def init_handler(event, _context):
         password=os.environ["DB_PASSWORD"],
         timeout=10,
     )
+
+    # Read-only diagnostic mode: list existing tables.
+    if event.get("check"):
+        tables = [r[0] for r in conn.run(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' ORDER BY 1"
+        )]
+        conn.close()
+        return {"existing_tables": tables}
+
+    # Avoid reinitializing an existing database.
     exists = conn.run("SELECT to_regclass('public.users')")[0][0]
     if exists:
         conn.close()
         return {"loaded": False, "reason": "schema already present"}
+
     here = os.path.dirname(__file__)
     with open(os.path.join(here, "schema.sql"), encoding="utf-8") as f:
-        conn.run(f.read())  # simple query protocol runs the whole script
+        conn.run(f.read())
     if event.get("seed"):
         with open(os.path.join(here, "seed.sql"), encoding="utf-8") as f:
             conn.run(f.read())
+
     tables = [r[0] for r in conn.run(
         "SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema='public' ORDER BY 1")]
+        "WHERE table_schema='public' ORDER BY 1"
+    )]
     conn.close()
     return {"loaded": True, "tables": tables}
